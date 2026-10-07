@@ -12,12 +12,12 @@ const past = events.filter((event) => event.status === 'past');
 <BaseLayout
   room="events"
   title="Events"
-  description="PAMI NIGHT and other gatherings, shows and small parties by Pami."
+  description="Events, exhibitions, and other activities by Pami."
 >
   <header class="events-head">
     <SiteNav current="events" />
     <h1 class="events-head__title">Events</h1>
-    <p>Nights, shows and gatherings. Mostly in Osaka. Come early, leave late.</p>
+    <p>Events, exhibitions, and other activities.</p>
   </header>
 
   {current.length > 0 ? <EventList heading="Now & Next" events={current} /> : <p class="events-empty">Nothing scheduled right now. Check back soon.</p>}
