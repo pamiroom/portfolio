@@ -53,8 +53,9 @@ const THEME_COLOR: Record<RoomId, string> = {
 <style>
   .page {
     position: relative;
-    min-height: 100vh;
-    min-height: 100dvh;
+    /* Always scrollable a little, so nothing stays stuck under the RoomBar. */
+    min-height: calc(100vh + var(--room-bar-clearance));
+    min-height: calc(100dvh + var(--room-bar-clearance));
     padding:
       calc(var(--gutter) + var(--safe-top))
       calc(var(--gutter) + var(--safe-right))

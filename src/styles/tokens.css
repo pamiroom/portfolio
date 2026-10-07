@@ -55,6 +55,13 @@
   /* Hit area for small text links on touch screens */
   --tap: 44px;
 
+  /*
+   * Extra scroll every page gets beyond one screen. The RoomBar is a --tap tall
+   * band fixed mid-screen; scrolling at least its height plus the tallest line
+   * of text lets any line move fully above or below it, even on short pages.
+   */
+  --room-bar-clearance: calc(var(--tap) + var(--text-display));
+
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
