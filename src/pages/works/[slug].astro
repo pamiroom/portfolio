@@ -1,0 +1,81 @@
+---
+import type { GetStaticPaths, InferGetStaticPropsType } from 'astro';
+import { Image } from 'astro:assets';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import SiteNav from '../../components/common/SiteNav.astro';
+import { getWorks, hasDetailPage } from '../../lib/works';
+import { shareImageUrl, sizedImage } from '../../lib/image';
+
+export const getStaticPaths = (async () => {
+  const works = (await getWorks()).filter(hasDetailPage);
+  return works.map((work, index) => ({
+    params: { slug: work.slug },
+    props: { work, next: works[(index + 1) % works.length]! },
+  }));
+}) satisfies GetStaticPaths;
+
+type Props = InferGetStaticPropsType<typeof getStaticPaths>;
+
+const { work, next } = Astro.props;
+/** The work is shown larger than on the home page, but still not big. */
+const DISPLAY_WIDTH = 320;
+const shareImage = await shareImageUrl(work.image, Astro.site);
+---
+
+<BaseLayout
+  room="home"
+  title={work.title}
+  description={work.description ?? `${work.title}, ${work.year}${work.category ? ` — ${work.category}` : ''}.`}
+  image={shareImage}
+  type="article"
+  back={{ href: '/', label: 'ALL WORKS' }}
+  sky={{ seed: work.slug.length * 13, count: 16, depth: 1 }}
+>
+  <SiteNav />
+
+  <article class="work-detail">
+    <figure class="work-detail__figure">
+      <Image {...sizedImage(work.image, DISPLAY_WIDTH)} densities={[1, 2]} alt={work.alt ?? work.title} loading="eager" />
+    </figure>
+    <div class="work-detail__caption">
+      <h1 class="work-detail__title">{work.title}</h1>
+      <p>{work.year}{work.category && <> / {work.category}</>}</p>
+      {work.description && <p class="work-detail__text">{work.description}</p>}
+      <p class="work-detail__next">
+        Next <span class="glyph" aria-hidden="true">→</span> <a href={`/works/${next.slug}/`}>{next.title}</a>
+      </p>
+    </div>
+  </article>
+</BaseLayout>
+
+<style>
+  .work-detail {
+    display: grid;
+    justify-items: center;
+    gap: var(--space-md);
+    padding-top: var(--space-xl);
+    text-align: center;
+  }
+
+  .work-detail__figure {
+    width: min(100%, 20rem);
+  }
+
+  .work-detail__caption {
+    display: grid;
+    gap: var(--space-2xs);
+    max-width: 28em;
+  }
+
+  .work-detail__title {
+    text-transform: uppercase;
+  }
+
+  .work-detail__text {
+    margin-top: var(--space-sm);
+  }
+
+  .work-detail__next {
+    margin-top: var(--space-lg);
+  }
+</style>

@@ -1,0 +1,38 @@
+---
+import { SITE } from '../../config/site';
+
+export type SeoProps = {
+  /** Page title; the site name is appended. Omit on the home page. */
+  title?: string;
+  description?: string;
+  /** Absolute URL or a path under /public. */
+  image?: string;
+  type?: 'website' | 'article';
+  noindex?: boolean;
+};
+
+type Props = SeoProps;
+
+const { title, description = SITE.description, image = SITE.defaultOgImage, type = 'website', noindex = false } = Astro.props;
+
+const fullTitle = title ? `${title} — ${SITE.name}` : SITE.title;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const imageUrl = new URL(image, Astro.site);
+---
+
+<title>{fullTitle}</title>
+<meta name="description" content={description} />
+{noindex ? <meta name="robots" content="noindex" /> : <link rel="canonical" href={canonical} />}
+
+<meta property="og:site_name" content={SITE.name} />
+<meta property="og:locale" content={SITE.ogLocale} />
+<meta property="og:type" content={type} />
+<meta property="og:title" content={fullTitle} />
+<meta property="og:description" content={description} />
+<meta property="og:url" content={canonical} />
+<meta property="og:image" content={imageUrl} />
+
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content={fullTitle} />
+<meta name="twitter:description" content={description} />
+<meta name="twitter:image" content={imageUrl} />

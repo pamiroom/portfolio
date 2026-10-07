@@ -1,0 +1,43 @@
+---
+/** Full-width biography in Japanese and English, then the contact line. */
+import { profile } from '../../data/profile';
+---
+
+<section class="bio" aria-labelledby="bio-heading">
+  <h1 id="bio-heading" class="visually-hidden">About {profile.name}</h1>
+  <p lang="ja">{profile.bioJa}</p>
+  <p lang="en">{profile.bioEn}</p>
+  <p class="bio__contact">
+    <a href={`mailto:${profile.email}`}>お問い合わせ (Contact) {profile.email}</a>
+  </p>
+</section>
+
+<style>
+  .bio {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.3em;
+    font-size: var(--text-bio);
+    line-height: var(--leading);
+  }
+
+  .bio [lang='ja'] {
+    letter-spacing: 0.06em;
+    line-break: strict;
+  }
+
+  .bio__contact a {
+    background: var(--room-invert-bg);
+    color: var(--room-invert-fg);
+    text-decoration-thickness: 1px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+
+  @media (hover: hover) {
+    .bio__contact a:hover {
+      background: transparent;
+      color: var(--room-fg);
+    }
+  }
+</style>

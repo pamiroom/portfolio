@@ -1,0 +1,73 @@
+---
+/** The thin centre column. Receives data; knows nothing about where it came from. */
+import WorkThumb from './WorkThumb.astro';
+import PixelArrow from '../common/PixelArrow.astro';
+import type { Work } from '../../types/work';
+
+type Props = {
+  works: Work[];
+};
+
+const { works } = Astro.props;
+---
+
+<section class="column" aria-labelledby="works-heading">
+  <h2 id="works-heading" class="visually-hidden">Works</h2>
+  <ol class="column__list">
+    {
+      works.map((work, index) => (
+        <li class="column__item">
+          <WorkThumb work={work} index={index} />
+        </li>
+      ))
+    }
+  </ol>
+  <p class="column__end">
+    <span class="glyph" aria-hidden="true">✦</span> {works.length} things so far <span class="glyph" aria-hidden="true">✦</span>
+    <br />
+    <a class="column__top" href="#top">
+      <PixelArrow direction="up" />
+      <span>BACK TO TOP</span>
+    </a>
+  </p>
+</section>
+
+<style>
+  .column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: var(--thumb-gap);
+  }
+
+  .column__list {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--thumb-gap);
+  }
+
+  .column__item {
+    display: flex;
+    justify-content: center;
+  }
+
+  .column__end {
+    margin-top: var(--space-2xl);
+    font-size: var(--text-xs);
+    text-align: center;
+    text-transform: uppercase;
+  }
+
+  .column__end .glyph {
+    color: var(--room-accent);
+  }
+
+  .column__top {
+    display: inline-flex;
+    gap: var(--space-xs);
+    align-items: center;
+    min-height: var(--tap);
+    margin-top: var(--space-xs);
+  }
+</style>

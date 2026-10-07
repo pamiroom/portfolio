@@ -1,0 +1,35 @@
+---
+/** Client names as one run-on, slash-separated block across the full width. */
+type Props = {
+  clients: string[];
+};
+
+const { clients } = Astro.props;
+---
+
+<section class="clients" aria-labelledby="clients-heading">
+  <h2 id="clients-heading">Client</h2>
+  <ul>
+    {clients.map((client) => <li>{client}</li>)}
+  </ul>
+</section>
+
+<style>
+  .clients {
+    font-size: var(--text-list);
+    line-height: 1.45;
+    text-transform: uppercase;
+  }
+
+  .clients h2 {
+    text-transform: none;
+  }
+
+  .clients li {
+    display: inline;
+  }
+
+  .clients li + li::before {
+    content: ' / ';
+  }
+</style>

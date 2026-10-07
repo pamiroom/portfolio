@@ -1,0 +1,103 @@
+---
+/** Event facts as a two-column definition list. Empty fields are skipped. */
+import StatusMark from './StatusMark.astro';
+import type { PamiEvent } from '../../types/event';
+import { formatDate, formatRange } from '../../lib/format';
+
+type Props = {
+  event: PamiEvent;
+};
+
+const { event } = Astro.props;
+---
+
+<dl class="meta">
+  <div>
+    <dt>Status</dt>
+    <dd><StatusMark status={event.status} /></dd>
+  </div>
+  <div>
+    <dt>Date</dt>
+    <dd>
+      <time datetime={event.startAt.toISOString()}>{formatRange(event.startAt, event.endAt)}</time>
+    </dd>
+  </div>
+  {
+    event.venue && (
+      <div>
+        <dt>Venue</dt>
+        <dd>{event.venue}</dd>
+      </div>
+    )
+  }
+  {
+    event.address && (
+      <div>
+        <dt>Address</dt>
+        <dd>
+          <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`} rel="noopener">
+            {event.address}
+            <span class="glyph" aria-hidden="true">↗</span>
+          </a>
+        </dd>
+      </div>
+    )
+  }
+  {
+    event.organizer && (
+      <div>
+        <dt>Organizer</dt>
+        <dd>{event.organizer}</dd>
+      </div>
+    )
+  }
+  {
+    event.externalUrl && (
+      <div>
+        <dt>Link</dt>
+        <dd>
+          <a href={event.externalUrl} rel="noopener">
+            {new URL(event.externalUrl).host}
+            <span class="glyph" aria-hidden="true">↗</span>
+          </a>
+        </dd>
+      </div>
+    )
+  }
+  {
+    event.publishedAt && (
+      <div>
+        <dt>Posted</dt>
+        <dd>
+          <time datetime={event.publishedAt.toISOString()}>{formatDate(event.publishedAt)}</time>
+        </dd>
+      </div>
+    )
+  }
+</dl>
+
+<style>
+  .meta {
+    display: grid;
+    gap: var(--space-2xs);
+    font-size: var(--text-sm);
+  }
+
+  .meta > div {
+    display: grid;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+    gap: var(--space-md);
+  }
+
+  dt {
+    color: var(--room-sub);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+    font-size: var(--text-xs);
+    line-height: inherit;
+  }
+
+  dd {
+    overflow-wrap: anywhere;
+  }
+</style>

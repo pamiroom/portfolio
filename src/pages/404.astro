@@ -1,0 +1,23 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SiteNav from '../components/common/SiteNav.astro';
+---
+
+<BaseLayout room="home" title="Not here" noindex sky={{ seed: 404, count: 24, depth: 1 }}>
+  <SiteNav />
+  <div class="lost">
+    <h1>404 <span class="glyph" aria-hidden="true">✦</span> Nothing in this corner.</h1>
+    <p><a href="/">Back to the room</a></p>
+  </div>
+</BaseLayout>
+
+<style>
+  .lost {
+    display: grid;
+    gap: var(--space-xs);
+    justify-items: center;
+    padding-top: 30vh;
+    padding-top: 30svh;
+    text-align: center;
+  }
+</style>

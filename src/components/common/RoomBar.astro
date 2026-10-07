@@ -1,0 +1,143 @@
+---
+/**
+ * The page footer, pinned to the vertical middle of the viewport:
+ * an optional way back on the left, the copyright in the centre and the
+ * arrow to the next room on the right. Content scrolls underneath it.
+ */
+import PixelArrow from './PixelArrow.astro';
+import { SITE } from '../../config/site';
+
+type BarLink = { href: string; label: string };
+
+type Props = {
+  next: BarLink;
+  back?: BarLink;
+};
+
+const { next, back } = Astro.props;
+const year = new Date().getFullYear();
+---
+
+<footer class="room-bar">
+  {
+    back && (
+      <a class="room-bar__link room-bar__link--back" href={back.href}>
+        <PixelArrow direction="left" />
+        <span class="room-bar__label">{back.label}</span>
+      </a>
+    )
+  }
+  <p class="room-bar__copy"><small>(C) {year} {SITE.name}.</small></p>
+  <a class="room-bar__link room-bar__link--next" href={next.href}>
+    <span class="room-bar__label"><span class="visually-hidden">Next: </span>{next.label}</span>
+    <PixelArrow />
+  </a>
+</footer>
+
+<style>
+  .room-bar {
+    position: fixed;
+    inset-inline: 0;
+    top: 50%;
+    z-index: 10;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding-inline: calc(var(--gutter) + var(--safe-left)) calc(var(--gutter) + var(--safe-right));
+    font-size: var(--room-bar-text);
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+
+  /* Each visible piece sits on a patch of the room colour, so whatever scrolls
+     underneath (thumbnails, text) never makes it unreadable. The link box itself
+     stays transparent: a hidden label must not cover content. */
+  .room-bar__copy,
+  .room-bar__label,
+  .room-bar__link :global(.pixel-arrow) {
+    background: var(--room-bg);
+  }
+
+  .room-bar__copy {
+    grid-column: 2;
+    padding-inline: var(--space-2xs);
+    color: var(--room-sub);
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .room-bar__copy small {
+    font-size: inherit;
+  }
+
+  .room-bar__label {
+    padding-inline: var(--space-2xs);
+  }
+
+  .room-bar__link {
+    display: inline-flex;
+    gap: var(--space-2xs);
+    align-items: center;
+    min-width: var(--tap);
+    min-height: var(--tap);
+    text-decoration: none;
+    pointer-events: auto;
+  }
+
+  .room-bar__link :global(.pixel-arrow) {
+    width: 1.15em;
+    height: 1.15em;
+  }
+
+  .room-bar__link--back {
+    grid-column: 1;
+    justify-self: start;
+  }
+
+  .room-bar__link--next {
+    grid-column: 3;
+    justify-self: end;
+    justify-content: flex-end;
+  }
+
+  /* The label hides until the arrow is approached; the arrow alone is the sign. */
+  .room-bar__label {
+    letter-spacing: var(--tracking-wide);
+    opacity: 0;
+    transform: translateX(var(--nudge, 4px));
+    transition:
+      opacity var(--dur) var(--ease),
+      transform var(--dur) var(--ease);
+  }
+
+  .room-bar__link--back .room-bar__label {
+    --nudge: -4px;
+  }
+
+  .room-bar__link:hover .room-bar__label,
+  .room-bar__link:focus-visible .room-bar__label {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Touch screens never hover, so keep the label visible there. */
+  @media (hover: none) {
+    .room-bar__label {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @media (hover: hover) {
+    .room-bar__link:hover {
+      background: none;
+      color: inherit;
+    }
+  }
+
+  .room-bar__link:focus-visible {
+    background: none;
+    color: inherit;
+    outline-offset: -2px;
+  }
+</style>

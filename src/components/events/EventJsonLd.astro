@@ -1,0 +1,40 @@
+---
+/** schema.org/Event structured data for search engines. */
+import type { PamiEvent } from '../../types/event';
+import { SITE } from '../../config/site';
+
+type Props = {
+  event: PamiEvent;
+  /** Absolute image URL, if the event has one. */
+  image?: string;
+};
+
+const { event, image } = Astro.props;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Event',
+  name: event.title,
+  description: event.description,
+  startDate: event.startAt.toISOString(),
+  endDate: event.endAt?.toISOString(),
+  eventStatus: 'https://schema.org/EventScheduled',
+  eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+  url: new URL(`/events/${event.slug}/`, Astro.site).href,
+  image: image ? [image] : undefined,
+  location: event.venue || event.address
+    ? {
+        '@type': 'Place',
+        name: event.venue ?? event.address,
+        address: event.address,
+      }
+    : undefined,
+  organizer: {
+    '@type': 'Organization',
+    name: event.organizer ?? SITE.name,
+    url: new URL('/', Astro.site).href,
+  },
+};
+---
+
+<script type="application/ld+json" set:html={JSON.stringify(jsonLd).replaceAll('<', '\\u003c')} />

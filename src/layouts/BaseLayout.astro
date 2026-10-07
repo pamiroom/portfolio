@@ -1,0 +1,69 @@
+---
+import '../styles/global.css';
+import Seo, { type SeoProps } from '../components/common/Seo.astro';
+import RoomBar from '../components/common/RoomBar.astro';
+import Sky from '../components/common/Sky.astro';
+import { SITE, nextRoom, type RoomId } from '../config/site';
+
+type Props = SeoProps & {
+  /** Which room's colours and "next" arrow to use. */
+  room: RoomId;
+  /** Optional link shown at the left of the middle bar. */
+  back?: { href: string; label: string };
+  /** Decorative sky; false to turn it off. */
+  sky?: { seed: number; count?: number; depth?: number } | false;
+};
+
+const { room, back, sky = false, ...seo } = Astro.props;
+const next = nextRoom(room);
+
+/** Keep in sync with --room-bg in tokens.css (browser chrome colour). */
+const THEME_COLOR: Record<RoomId, string> = {
+  home: '#007a0c',
+  about: '#b6dc3e',
+  events: '#1a2fd6',
+};
+---
+
+<!doctype html>
+<html lang={SITE.lang} data-room={room}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content={THEME_COLOR[room]} />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="sitemap" href="/sitemap-index.xml" />
+    <meta name="generator" content={Astro.generator} />
+    <Seo {...seo} />
+    <slot name="head" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="page">
+      {sky && <Sky {...sky} />}
+      <main id="main" class="page__main">
+        <slot />
+      </main>
+    </div>
+    <RoomBar next={next} back={back} />
+  </body>
+</html>
+
+<style>
+  .page {
+    position: relative;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding:
+      calc(var(--gutter) + var(--safe-top))
+      calc(var(--gutter) + var(--safe-right))
+      calc(var(--space-xl) + var(--safe-bottom))
+      calc(var(--gutter) + var(--safe-left));
+  }
+
+  .page__main {
+    position: relative;
+    z-index: 1;
+  }
+</style>

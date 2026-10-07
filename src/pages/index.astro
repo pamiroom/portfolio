@@ -1,0 +1,13 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Intro from '../components/home/Intro.astro';
+import WorkColumn from '../components/home/WorkColumn.astro';
+import { getWorks } from '../lib/works';
+
+const works = await getWorks();
+---
+
+<BaseLayout room="home" sky={{ seed: 26, count: 40, depth: 4 }}>
+  <Intro />
+  <WorkColumn works={works} />
+</BaseLayout>

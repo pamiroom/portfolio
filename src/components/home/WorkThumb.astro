@@ -1,0 +1,185 @@
+---
+/**
+ * A tiny thumbnail in the centre column. Title, year and category appear
+ * beside it on hover/focus (and stay visible under it on touch screens).
+ */
+import { Image } from 'astro:assets';
+import type { Work } from '../../types/work';
+import { workHref } from '../../lib/works';
+import { sizedImage } from '../../lib/image';
+
+type Props = {
+  work: Work;
+  index: number;
+};
+
+const { work, index } = Astro.props;
+
+/** Rendered width in CSS px at its largest (the phone size), see --thumb. */
+const THUMB_WIDTH = 104;
+/** Thumbnails in the first screen load eagerly. */
+const EAGER_COUNT = 4;
+/** A small deterministic set of tilts so hover never feels mechanical. */
+const TILTS = ['-2deg', '1.5deg', '3deg', '-1deg', '2deg', '-3deg'];
+
+const external = Boolean(work.url);
+const side = index % 2 === 0 ? 'right' : 'left';
+const loading = index < EAGER_COUNT ? 'eager' : 'lazy';
+---
+
+<a
+  class="work"
+  href={workHref(work)}
+  data-side={side}
+  style={`--tilt:${TILTS[index % TILTS.length]}`}
+  {...external ? { rel: 'noopener' } : {}}
+>
+  <span class="work__frame">
+    <Image class="work__img" {...sizedImage(work.image, THUMB_WIDTH)} densities={[1, 2]} alt="" loading={loading} />
+    {
+      work.altImage && (
+        <Image class="work__img work__img--b" {...sizedImage(work.altImage, THUMB_WIDTH)} densities={[1, 2]} alt="" loading="lazy" />
+      )
+    }
+  </span>
+  <span class="work__label">
+    <span class="work__title">{work.title}</span>
+    <span class="work__meta">
+      {work.year}{work.category && <> / {work.category}</>}
+      {
+        external && (
+          <>
+            <span class="glyph" aria-hidden="true">↗</span>
+            <span class="visually-hidden">(external site)</span>
+          </>
+        )
+      }
+    </span>
+  </span>
+</a>
+
+<style>
+  .work {
+    position: relative;
+    display: block;
+    width: var(--thumb);
+    text-decoration: none;
+    outline: none;
+  }
+
+  .work__frame {
+    position: relative;
+    display: block;
+    transition: transform var(--dur) var(--ease);
+  }
+
+  .work__img {
+    width: 100%;
+    height: auto;
+  }
+
+  /* Second frame: a two-frame GIF made of CSS. */
+  .work__img--b {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+    opacity: 0;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .work__img--b {
+      animation: work-flip 1.6s steps(1, end) infinite;
+    }
+  }
+
+  @keyframes work-flip {
+    50% {
+      opacity: 1;
+    }
+  }
+
+  .work__label {
+    display: block;
+    font-size: var(--text-xs);
+    line-height: var(--leading-tight);
+    overflow-wrap: anywhere;
+  }
+
+  .work__title,
+  .work__meta {
+    display: block;
+  }
+
+  .work__title {
+    text-transform: uppercase;
+  }
+
+  .work__meta {
+    color: var(--room-sub);
+  }
+
+  /* Pointer devices: the label floats beside the image, alternating sides. */
+  @media (hover: hover) {
+    .work__label {
+      position: absolute;
+      top: 0;
+      width: max-content;
+      max-width: 14rem;
+      padding: var(--space-3xs) var(--space-2xs);
+      background: var(--room-invert-bg);
+      color: var(--room-invert-fg);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(4px);
+      transition:
+        opacity var(--dur-fast) linear,
+        transform var(--dur) var(--ease);
+    }
+
+    .work__meta {
+      color: inherit;
+    }
+
+    .work[data-side='right'] .work__label {
+      left: calc(100% + var(--space-md));
+    }
+
+    .work[data-side='left'] .work__label {
+      right: calc(100% + var(--space-md));
+      text-align: right;
+    }
+
+    .work:hover {
+      background: none;
+      color: inherit;
+    }
+
+    .work:hover .work__frame,
+    .work:focus-visible .work__frame {
+      transform: scale(1.08) rotate(var(--tilt));
+    }
+
+    .work:hover .work__label,
+    .work:focus-visible .work__label {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Touch: a quiet caption under each image instead. */
+  @media (hover: none) {
+    .work__label {
+      margin-top: var(--space-2xs);
+    }
+  }
+
+  .work:focus-visible {
+    background: none;
+    color: inherit;
+  }
+
+  .work:focus-visible .work__frame {
+    outline: 2px solid var(--room-fg);
+    outline-offset: 4px;
+  }
+</style>

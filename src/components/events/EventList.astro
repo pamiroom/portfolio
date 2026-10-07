@@ -1,0 +1,147 @@
+---
+/**
+ * Events as a typeset timetable, one line per event:
+ * 2026.11.03 (TUE)   PAMI NIGHT #01   OSAKA   UPCOMING   →
+ */
+import PixelArrow from '../common/PixelArrow.astro';
+import StatusMark from './StatusMark.astro';
+import type { PamiEvent } from '../../types/event';
+import { formatDate, formatWeekday } from '../../lib/format';
+
+type Props = {
+  heading: string;
+  events: PamiEvent[];
+};
+
+const { heading, events } = Astro.props;
+const id = `events-${heading.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+---
+
+<section class="event-list" aria-labelledby={id}>
+  <h2 id={id} class="event-list__heading">{heading}</h2>
+  <ol>
+    {
+      events.map((event) => (
+        <li>
+          <a class="event-row" href={`/events/${event.slug}/`} data-status={event.status}>
+            <span class="event-row__date">
+              <time datetime={event.startAt.toISOString()}>{formatDate(event.startAt)}</time>
+              <span class="event-row__weekday">({formatWeekday(event.startAt)})</span>
+            </span>
+            <span class="event-row__title">{event.title}</span>
+            <span class="event-row__place">{event.address ?? event.venue}</span>
+            <span class="event-row__status">
+              <StatusMark status={event.status} />
+            </span>
+            <PixelArrow class="event-row__arrow" />
+          </a>
+        </li>
+      ))
+    }
+  </ol>
+</section>
+
+<style>
+  .event-list + .event-list {
+    margin-top: var(--space-2xl);
+  }
+
+  .event-list__heading {
+    padding-bottom: var(--space-xs);
+    font-size: var(--text-xs);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    color: var(--room-sub);
+  }
+
+  .event-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'date status'
+      'title title'
+      'place arrow';
+    gap: var(--space-2xs) var(--space-md);
+    align-items: baseline;
+    padding-block: var(--space-sm);
+    border-top: 1px solid currentColor;
+    text-decoration: none;
+  }
+
+  li:last-child .event-row {
+    border-bottom: 1px solid currentColor;
+  }
+
+  .event-row__date {
+    grid-area: date;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .event-row__weekday {
+    margin-inline-start: 0.3em;
+  }
+
+  .event-row__title {
+    grid-area: title;
+    font-size: var(--text-display);
+    line-height: 1;
+    letter-spacing: -0.01em;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+  }
+
+  .event-row__place {
+    grid-area: place;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+  }
+
+  .event-row__status {
+    grid-area: status;
+    justify-self: end;
+  }
+
+  .event-row :global(.event-row__arrow) {
+    grid-area: arrow;
+    justify-self: end;
+    align-self: center;
+    transition: transform var(--dur) var(--ease);
+  }
+
+  .event-row[data-status='past'] {
+    color: var(--room-sub);
+  }
+
+  /* Whole row inverts on hover/focus; the badge inside flips back so it stays visible. */
+  .event-row[data-status]:focus-visible {
+    color: var(--room-invert-fg);
+  }
+
+  .event-row:focus-visible > *,
+  .event-row:hover > * {
+    --room-invert-bg: var(--room-bg);
+    --room-invert-fg: var(--room-fg);
+  }
+
+  @media (hover: hover) {
+    .event-row[data-status]:hover {
+      color: var(--room-invert-fg);
+    }
+
+    .event-row:hover :global(.event-row__arrow) {
+      transform: translateX(6px);
+    }
+  }
+
+  @media (min-width: 64em) {
+    .event-row {
+      grid-template-columns: 11rem minmax(0, 1fr) 14rem 7rem 1rem;
+      grid-template-areas: 'date title place status arrow';
+      padding-block: var(--space-xs);
+    }
+
+    .event-row__status {
+      justify-self: start;
+    }
+  }
+</style>

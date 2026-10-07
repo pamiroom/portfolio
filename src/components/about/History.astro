@@ -1,0 +1,55 @@
+---
+/** Dated text lines: "2025.05：Something at somewhere ⇨ LINK". */
+import type { HistorySection } from '../../types/profile';
+
+type Props = {
+  sections: HistorySection[];
+};
+
+const { sections } = Astro.props;
+const isExternal = (href: string) => /^https?:\/\//.test(href);
+---
+
+{
+  sections.map((section) => (
+    <section class="history">
+      <h2 class="history__heading">{section.heading}</h2>
+      <ul>
+        {section.entries.map((entry) => (
+          <li>
+            {entry.date && (
+              <>
+                <span class="history__date">{entry.date}</span>
+                <span aria-hidden="true">：</span>
+              </>
+            )}
+            {entry.text}
+            {entry.link && (
+              <>
+                <span class="glyph history__point" aria-hidden="true">⇨</span>
+                <a href={entry.link.href} {...(isExternal(entry.link.href) ? { rel: 'noopener' } : {})}>
+                  {entry.link.label}
+                </a>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  ))
+}
+
+<style>
+  .history {
+    font-size: var(--text-list);
+    line-height: 1.45;
+  }
+
+  .history__date {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .history__point {
+    margin-inline: 0.4em;
+  }
+</style>

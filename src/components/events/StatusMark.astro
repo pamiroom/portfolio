@@ -1,0 +1,51 @@
+---
+import type { EventStatus } from '../../types/event';
+
+type Props = {
+  status: EventStatus;
+};
+
+const { status } = Astro.props;
+const LABEL: Record<EventStatus, string> = {
+  upcoming: 'Upcoming',
+  ongoing: 'Now on',
+  past: 'Past',
+};
+---
+
+<span class="status" data-status={status}>
+  {status === 'ongoing' && <span class="glyph status__blink" aria-hidden="true">✦</span>}
+  {LABEL[status]}
+</span>
+
+<style>
+  .status {
+    font-size: var(--text-xs);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .status[data-status='ongoing'] {
+    padding: 0 var(--space-2xs);
+    background: var(--room-invert-bg);
+    color: var(--room-invert-fg);
+  }
+
+  .status__blink {
+    display: inline-block;
+    margin-inline-end: 0.2em;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .status__blink {
+      animation: status-blink 1.2s steps(1, end) infinite;
+    }
+  }
+
+  @keyframes status-blink {
+    50% {
+      opacity: 0;
+    }
+  }
+</style>

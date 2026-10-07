@@ -1,0 +1,52 @@
+---
+/** One run-on line across the full width: title / rooms / intro / links. */
+import SiteNav from '../common/SiteNav.astro';
+import { profile } from '../../data/profile';
+---
+
+<header class="intro">
+  <h1 class="intro__title">{profile.tagline}</h1>
+  <span class="intro__sep" aria-hidden="true">/</span>
+  <SiteNav exclude={['home']} inline />
+  <span class="intro__sep" aria-hidden="true">/</span>
+  <p>{profile.intro}</p>
+  <span class="intro__sep" aria-hidden="true">/</span>
+  <ul class="intro__links">
+    {
+      profile.links.map((link) => (
+        <li>
+          <a href={link.href} rel="me noopener">
+            {link.label}
+            <span class="glyph" aria-hidden="true">↗</span>
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+</header>
+
+<style>
+  .intro {
+    font-size: var(--text-sm);
+    line-height: var(--leading);
+  }
+
+  .intro > *,
+  .intro__links li {
+    display: inline;
+  }
+
+  .intro__sep {
+    margin-inline: 0.25em;
+  }
+
+  .intro__links li + li::before {
+    content: ' / ';
+  }
+
+  @media (max-width: 47.99em) {
+    .intro {
+      font-size: var(--text-md);
+    }
+  }
+</style>

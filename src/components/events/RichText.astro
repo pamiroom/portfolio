@@ -1,0 +1,79 @@
+---
+/** Renders already-sanitised Rich Editor HTML (see lib/sanitize.ts). */
+type Props = {
+  html: string;
+};
+
+const { html } = Astro.props;
+---
+
+{html && <div class="rich-text" set:html={html} />}
+
+<style>
+  .rich-text {
+    max-width: 38em;
+    overflow-wrap: anywhere;
+    font-size: var(--text-md);
+    line-height: var(--leading-loose);
+  }
+
+  .rich-text :global(> * + *) {
+    margin-top: 1em;
+  }
+
+  .rich-text :global(h2),
+  .rich-text :global(h3),
+  .rich-text :global(h4),
+  .rich-text :global(h5) {
+    margin-top: 2em;
+    font-size: var(--text-xs);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    color: var(--room-sub);
+  }
+
+  .rich-text :global(ul),
+  .rich-text :global(ol) {
+    padding-inline-start: 1.2em;
+  }
+
+  .rich-text :global(ul) {
+    list-style: '✦ ';
+  }
+
+  .rich-text :global(ol) {
+    list-style: decimal;
+  }
+
+  .rich-text :global(blockquote) {
+    padding-inline-start: 1em;
+    border-inline-start: 1px solid currentColor;
+  }
+
+  .rich-text :global(img),
+  .rich-text :global(iframe) {
+    max-width: 100%;
+  }
+
+  .rich-text :global(iframe) {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    border: 0;
+  }
+
+  .rich-text :global(table) {
+    border-collapse: collapse;
+  }
+
+  .rich-text :global(th),
+  .rich-text :global(td) {
+    padding: var(--space-2xs) var(--space-xs);
+    border: 1px solid currentColor;
+    text-align: start;
+  }
+
+  .rich-text :global(pre) {
+    overflow-x: auto;
+  }
+</style>

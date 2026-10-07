@@ -1,0 +1,69 @@
+---
+/**
+ * The room list, set as running text ("PAMI / ABOUT / EVENTS").
+ * The current room is marked with a star instead of a link.
+ */
+import { ROOMS, type RoomId } from '../../config/site';
+
+type Props = {
+  current?: RoomId;
+  /** Rooms to leave out, e.g. the home page skips itself. */
+  exclude?: RoomId[];
+  /** Flow inside a sentence instead of sitting on its own line. */
+  inline?: boolean;
+};
+
+const { current, exclude = [], inline = false } = Astro.props;
+const rooms = ROOMS.filter((room) => !exclude.includes(room.id));
+---
+
+<nav class:list={['site-nav', { 'site-nav--inline': inline }]} aria-label="Rooms">
+  <ul>
+    {
+      rooms.map((room) => (
+        <li>
+          {room.id === current ? (
+            <span class="site-nav__current" aria-current="page">
+              <span class="glyph" aria-hidden="true">✦</span>
+              {room.label}
+            </span>
+          ) : (
+            <a href={room.href}>{room.label}</a>
+          )}
+        </li>
+      ))
+    }
+  </ul>
+</nav>
+
+<style>
+  .site-nav {
+    font-size: var(--text-sm);
+  }
+
+  .site-nav--inline,
+  .site-nav ul,
+  .site-nav li {
+    display: inline;
+  }
+
+  .site-nav--inline {
+    font-size: inherit;
+  }
+
+  .site-nav li + li::before {
+    content: ' / ';
+  }
+
+  /* Bigger hit area on touch without changing the line. */
+  @media (pointer: coarse) {
+    .site-nav a {
+      padding-block: var(--space-sm);
+    }
+  }
+
+  .site-nav__current .glyph {
+    color: var(--room-accent);
+    margin-inline-end: 0.15em;
+  }
+</style>

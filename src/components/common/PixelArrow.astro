@@ -1,0 +1,29 @@
+---
+/** A 7×7 pixel arrow. Purely decorative: the parent link carries the label. */
+type Props = {
+  direction?: 'right' | 'left' | 'up';
+  class?: string;
+};
+
+const { direction = 'right', class: className } = Astro.props;
+const rotation = { right: 0, left: 180, up: -90 }[direction];
+---
+
+<svg
+  class:list={['pixel-arrow', className]}
+  viewBox="0 0 7 7"
+  width="14"
+  height="14"
+  shape-rendering="crispEdges"
+  aria-hidden="true"
+  focusable="false"
+  style={`transform: rotate(${rotation}deg)`}
+>
+  <path fill="currentColor" d="M0 3h5v1H0zM3 1h1v5H3zM4 2h1v3H4zM5 3h1v1H5z" />
+</svg>
+
+<style>
+  .pixel-arrow {
+    flex: none;
+  }
+</style>
