@@ -1,0 +1,81 @@
+---
+/**
+ * microCMS screen preview for one event, rendered on demand by the Cloudflare
+ * Worker (preview.pami.ooo). Not part of the static XServer site.
+ *
+ * microCMS opens: /preview/events/{CONTENT_ID}/?draftKey={DRAFT_KEY}
+ * The draftKey is only passed to the microCMS API; it is never rendered,
+ * logged or added to any link.
+ */
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import EventDetail from '../../../components/events/EventDetail.astro';
+import SiteNav from '../../../components/common/SiteNav.astro';
+import { getPreviewEvent, type PreviewResult } from '../../../lib/events';
+
+export const prerender = false;
+
+const result = await getPreviewEvent(Astro.params.contentId, Astro.url.searchParams.get('draftKey'));
+
+const ERROR_STATUS: Record<Exclude<PreviewResult, { ok: true }>['reason'], number> = {
+  'bad-request': 400,
+  'not-found': 404,
+  unavailable: 503,
+};
+const ERROR_TEXT: Record<keyof typeof ERROR_STATUS, string> = {
+  'bad-request': 'This preview link is incomplete. Open it again from microCMS.',
+  'not-found': 'No draft found. The preview link may have expired; open it again from microCMS.',
+  unavailable: 'Preview is unavailable right now. Try again in a moment.',
+};
+
+if (!result.ok) Astro.response.status = ERROR_STATUS[result.reason];
+// Drafts must never be cached, indexed, or leak their URL (with the draftKey) via Referer.
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+Astro.response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+Astro.response.headers.set('Referrer-Policy', 'no-referrer');
+---
+
+<BaseLayout room="events" title={result.ok ? `Preview: ${result.event.title}` : 'Preview'} noindex back={{ href: '/events/', label: 'ALL EVENTS' }}>
+  <meta slot="head" name="referrer" content="no-referrer" />
+  {
+    result.ok ? (
+      <EventDetail event={result.event}>
+        <p slot="notice" class="preview-mark">
+          <span class="glyph" aria-hidden="true">✦</span> Unpublished preview
+        </p>
+      </EventDetail>
+    ) : (
+      <>
+        <div class="preview-error__nav">
+          <SiteNav current="events" />
+        </div>
+        <div class="preview-error">
+          <p class="preview-mark">
+            <span class="glyph" aria-hidden="true">✦</span> Preview
+          </p>
+          <h1>{ERROR_TEXT[result.reason]}</h1>
+        </div>
+      </>
+    )
+  }
+</BaseLayout>
+
+<style>
+  .preview-mark {
+    display: inline-block;
+    margin-bottom: var(--space-sm);
+    padding-inline: var(--space-2xs);
+    background: var(--room-invert-bg);
+    color: var(--room-invert-fg);
+    font-size: var(--text-xs);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+  }
+
+  .preview-error__nav {
+    margin-bottom: var(--space-xl);
+  }
+
+  .preview-error {
+    max-width: 36em;
+  }
+</style>

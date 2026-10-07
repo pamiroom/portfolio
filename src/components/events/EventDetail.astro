@@ -1,0 +1,114 @@
+---
+/**
+ * The body of an event page. Shared by the static /events/[slug]/ page and the
+ * microCMS preview, so a preview always looks exactly like the published page.
+ * A page can put a notice above the heading through the "notice" slot.
+ */
+import { Image } from 'astro:assets';
+import SiteNav from '../common/SiteNav.astro';
+import EventMeta from './EventMeta.astro';
+import RichText from './RichText.astro';
+import type { PamiEvent } from '../../types/event';
+import { formatDate } from '../../lib/format';
+import { sizedImage } from '../../lib/image';
+
+type Props = {
+  event: PamiEvent;
+};
+
+const { event } = Astro.props;
+/** Key visual display width; small on purpose, like everything else here. */
+const VISUAL_WIDTH = 360;
+---
+
+<div class="event__nav"><SiteNav current="events" /></div>
+
+<article class="event">
+  <header class="event__head">
+    <slot name="notice" />
+    <p class="event__date">
+      <time datetime={event.startAt.toISOString()}>{formatDate(event.startAt)}</time>
+    </p>
+    <h1 class="event__title">{event.title}</h1>
+    {event.description && <p class="event__lead">{event.description}</p>}
+  </header>
+
+  <div class="event__body">
+    {
+      event.image && (
+        <figure class="event__visual">
+          <Image
+            {...sizedImage(event.image, VISUAL_WIDTH)}
+            densities={[1, 2]}
+            alt={event.imageAlt ?? `${event.title} key visual`}
+            loading="eager"
+          />
+        </figure>
+      )
+    }
+    <div class="event__text">
+      <EventMeta event={event} />
+      <RichText html={event.contentHtml} />
+    </div>
+  </div>
+</article>
+
+<style>
+  .event__nav {
+    margin-bottom: var(--space-xl);
+  }
+
+  .event__head {
+    margin-bottom: var(--space-xl);
+  }
+
+  .event__date {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .event__title {
+    margin-top: var(--space-2xs);
+    font-size: var(--text-display);
+    line-height: 1;
+    letter-spacing: -0.01em;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+  }
+
+  .event__lead {
+    max-width: 36em;
+    margin-top: var(--space-sm);
+    font-size: var(--text-md);
+    color: var(--room-sub);
+  }
+
+  .event__body {
+    display: grid;
+    /* minmax(0, …) so a long URL in the CMS text can't widen the page */
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-lg);
+  }
+
+  .event__visual {
+    width: min(100%, 22.5rem);
+  }
+
+  .event__text {
+    display: grid;
+    gap: var(--space-xl);
+    align-content: start;
+  }
+
+  @media (min-width: 64em) {
+    .event__body {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: var(--space-xl);
+    }
+
+    .event__visual {
+      justify-self: end;
+      order: 2;
+      width: clamp(12rem, 18vw, 22.5rem);
+    }
+  }
+</style>

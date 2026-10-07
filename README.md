@@ -11,6 +11,17 @@ Works・プロフィールはリポジトリ内のファイルで管理します
 画面の縦中央に固定された小さなバー（← 戻る / (C) / 次の部屋 →）が共通のフッター兼導線です。
 部屋は `PAMI → ABOUT → EVENTS → PAMI` の順に循環します。
 
+### ホスティング構成
+
+|            | 本番                         | プレビュー（編集者専用）                     |
+| ---------- | ---------------------------- | -------------------------------------------- |
+| URL        | https://pami.ooo             | https://preview.pami.ooo                     |
+| ホスティング | XServer レンタルサーバー       | Cloudflare Workers（Worker 名 `pami-preview`） |
+| 中身       | Astro の静的 HTML（`dist/client/`） | 同じ静的 HTML ＋ `/preview/events/[contentId]/` だけをリクエスト時に生成 |
+| microCMS   | ビルド時に公開済みイベントを取得 | リクエスト時に下書き（draftKey）を取得          |
+
+Astro は `output: 'static'` のままで、全ページを事前生成します。`@astrojs/cloudflare` アダプタは、`prerender = false` のプレビュー用ルート 1 つのためだけに入れています。
+
 ---
 
 ## 開発
@@ -28,8 +39,8 @@ microCMS の設定がなくても `src/data/events.ts` のモックイベント�
 | command           | 内容                                  |
 | ----------------- | ------------------------------------- |
 | `npm run dev`     | 開発サーバー                          |
-| `npm run build`   | `dist/` に静的ファイルを生成          |
-| `npm run preview` | ビルド結果をローカルで確認            |
+| `npm run build`   | `dist/client/` に静的サイト（XServer 用）、`dist/server/` にプレビュー Worker を生成 |
+| `npm run preview` | ビルド結果を Cloudflare のランタイム（workerd）でローカル実行。プレビュールートも動く |
 | `npm run check`   | `astro check`（TypeScript / Astro 型検査） |
 
 ---
@@ -45,11 +56,19 @@ microCMS の設定がなくても `src/data/events.ts` のモックイベント�
 | `SITE_URL`                | デプロイ時   | 公開 URL（canonical / OGP / sitemap / JSON-LD に使用）例: `https://pami.jp` |
 | `MICROCMS_REQUIRED`       | 任意         | `true`: キー必須 / `false`: キーなしでもモックで続行 / 未設定: デプロイ時のみ必須 |
 
-**API キーに `PUBLIC_` を付けないでください。** これらはビルド時にだけ読まれ、ブラウザには配信されません（クライアント JS は 0 本です）。
+**API キーに `PUBLIC_` を付けないでください。** microCMS の 2 つは `astro:env` のサーバー専用シークレット（`astro.config.mjs` の `env.schema`）として読み込みます。バンドルに値が埋め込まれることはなく、ブラウザにも配信されません（クライアント JS は 0 本です）。
+
+| いつ読むか | どこから | 用途 |
+| ---------- | -------- | ---- |
+| ビルド時   | `.env` / ビルド環境の変数 | 静的なイベントページの生成 |
+| リクエスト時（プレビュー Worker） | Cloudflare の **Runtime Secrets**（ローカルでは `.dev.vars`、なければ `.env`） | `/preview/events/…` での下書き取得 |
+
+ローカルで Worker を動かすときは、`.dev.vars.example` を `.dev.vars` にコピーします（`.dev.vars` は Git に含まれません）。`.env` があれば省略できます。
+なお、`npm run build` のたびに Cloudflare の Vite プラグインがローカル用の `dist/server/.dev.vars`（`.env` の値のコピー）を作ります。`dist/` は Git 対象外で、`wrangler deploy` もこのファイルをアップロードしません。それでも、`dist/server/` を手作業でどこかへコピーしないでください。
 
 ### デプロイ時の安全装置（`astro.config.mjs` の `deploymentGuards`）
 
-ホスティング上のビルド（環境変数 `CI` / `VERCEL` / `NETLIFY` / `CF_PAGES` のいずれかがある）では、以下の場合に**ビルドを失敗**させます。仮 URL やモックイベントのまま公開される事故を防ぐためです。
+ホスティング上のビルド（環境変数 `CI` / `WORKERS_CI` / `VERCEL` / `NETLIFY` / `CF_PAGES` のいずれかがある。Cloudflare Workers Builds もこれに該当）では、以下の場合に**ビルドを失敗**させます。仮 URL やモックイベントのまま公開される事故を防ぐためです。
 
 - `SITE_URL` が未設定（未設定だと URL が仮の `https://pami.example` になる）
 - microCMS のキーが未設定（`MICROCMS_REQUIRED=false` を明示した場合を除く）
@@ -111,11 +130,26 @@ microCMS の設定がなくても `src/data/events.ts` のモックイベント�
 
 静的サイトなので、記事の公開・更新時にサイトを再ビルドする必要があります。
 
-1. ホスティング側で Deploy Hook URL を発行（Vercel: Project → Settings → Git → Deploy Hooks）
+1. 本番（XServer）向けのビルド・アップロードを行う仕組み（CI など）で、Deploy Hook URL を発行
 2. microCMS「API 設定 → Webhook → カスタム通知」に、その URL を登録
 3. 「コンテンツの公開時・更新時・削除時」にチェック
 
-### 5. ステータスとビルドのタイミング（重要）
+### 5. 画面プレビュー（下書きの確認）
+
+「API 設定 → 画面プレビュー」に、次の URL を**そのまま**入力します。
+
+```
+https://preview.pami.ooo/preview/events/{CONTENT_ID}/?draftKey={DRAFT_KEY}
+```
+
+- `{CONTENT_ID}` と `{DRAFT_KEY}` は microCMS が置き換えます。プレビューは **slug ではなくコンテンツ ID** で取得するため、slug が未入力・変更中でも確認できます。
+- 表示は公開ページと同じ部品（`EventDetail`）で描画し、上部に `✦ UNPUBLISHED PREVIEW` が付きます。
+- プレビューのページには `noindex,nofollow`、`Cache-Control: private, no-store`、`Referrer-Policy: no-referrer` が付きます。canonical と JSON-LD は出さず、sitemap にも含めません。`preview.pami.ooo` 上の全レスポンスにも `X-Robots-Tag: noindex, nofollow` が付きます。
+- draftKey は microCMS への API リクエストにしか使いません。HTML・リンク・ログには出しません（Workers Logs もこのために無効にしています）。
+- リンクの不備は 400、存在しない（または期限切れの）下書きは 404、microCMS や通信の障害は 503 を返します。エラー詳細や API キーは表示しません。モックに切り替わることもありません。
+- 公開済みのコンテンツを開いた場合は、公開中の内容がそのまま表示されます（microCMS の仕様）。
+
+### 6. ステータスとビルドのタイミング（重要）
 
 このサイトは静的 HTML です。**Upcoming / Now on / Past の表示と、一覧の並び（Now & Next / Archive）は、ビルドした瞬間の日時で固定されます。** 日付が変わっても、再ビルドするまで表示は変わりません。
 
@@ -189,12 +223,14 @@ src/
     common/          Seo, SiteNav, RoomBar（中央固定バー）, Sky（ピクセル星）, PixelArrow
     home/            Intro, WorkColumn, WorkThumb
     about/           Bio, History, Clients
-    events/          EventList, EventMeta, StatusMark, RichText, EventJsonLd
+    events/          EventDetail（公開ページとプレビューで共有）, EventList, EventMeta, StatusMark, RichText, EventJsonLd
   config/site.ts     サイト名・タイムゾーン・部屋の順番
   data/              works.ts / profile.ts / events.ts（モック）
   layouts/BaseLayout.astro
   lib/               microcms.ts, events.ts, works.ts, sanitize.ts, format.ts, image.ts
   pages/             index, about, events/, works/, 404, robots.txt
+                     preview/events/[contentId].astro（Cloudflare 上でだけ動くプレビュー）
+  worker.ts          プレビュー Worker の入口（静的ファイル配信、noindex、末尾スラッシュ）
   styles/            tokens.css, global.css
   types/             event.ts, work.ts, profile.ts, image.ts
 ```
@@ -206,13 +242,55 @@ src/
 
 ## デプロイ
 
-完全な静的サイトなので、`npm run build` → `dist/` を任意の静的ホスティングに置けば動きます。
+### 本番: pami.ooo（XServer / 静的）
 
-**Vercel の場合**
+1. `MICROCMS_SERVICE_DOMAIN`・`MICROCMS_API_KEY`・`MICROCMS_REQUIRED=true`・`SITE_URL=https://pami.ooo` を設定して `npm run build`
+2. **`dist/client/` の中身**を公開ディレクトリにアップロード（`dist/` ではありません）
+   - `_headers` と `.assetsignore` は Cloudflare 専用のファイルです。XServer では使わないので、アップロードから外して構いません（置いても無害です）。
+   - `dist/server/` はアップロードしないでください。
+3. XServer では Worker ランタイムは不要です。`/preview/` 以下は存在せず、404 になります。
 
-1. リポジトリを Import（Framework: Astro は自動検出）
-2. Environment Variables に `MICROCMS_SERVICE_DOMAIN`, `MICROCMS_API_KEY`, `SITE_URL` を設定（Production と Preview の両方。未設定だとビルドが止まります）
-3. Node.js バージョンを 22.x 以上に
-4. Deploy Hook を作り、microCMS の Webhook に登録（上記）
+### プレビュー: preview.pami.ooo（Cloudflare Workers）
 
-Netlify / Cloudflare Pages も同様です（Build command: `npm run build`、Output: `dist`）。
+設定は `wrangler.jsonc` にすべて書いてあり、Dashboard の自動設定には頼りません。
+
+- Worker 名 `pami-preview`、`compatibility_date: 2026-10-06`、`nodejs_compat`
+- 入口は `src/worker.ts`（`@astrojs/cloudflare/handler` を包む薄いラッパー）
+- `assets.run_worker_first: true`（全レスポンスに noindex を付けるため）
+- KV（セッション）と Images のバインディングは使いません（`session: false`、`imageService: 'compile'`）
+- compatibility_date は、同梱の workerd が対応する最新日付にしています（ローカルと本番の挙動をそろえるため）
+
+**Workers Builds（Settings → Build）**
+
+| 項目 | 値 |
+| ---- | -- |
+| Git repository | `pamiroom/portfolio` |
+| Root directory | `/` |
+| Build command | `npm run build` |
+| Deploy command | `npx wrangler deploy` |
+| Non-production branch deploy command（Preview） | `npx wrangler preview` |
+
+**Build variables（ビルド時。静的ページの生成用）**
+
+| 変数 | 値 |
+| ---- | -- |
+| `MICROCMS_SERVICE_DOMAIN` | サービス ID |
+| `MICROCMS_API_KEY` | GET のみの API キー（Secret として登録） |
+| `MICROCMS_REQUIRED` | `true` |
+| `SITE_URL` | `https://pami.ooo`（canonical は本番を指す） |
+| `NODE_VERSION` | `22.23.2` |
+
+**Runtime secrets（Worker 実行時。プレビューでの下書き取得用）**
+
+Settings → Variables and Secrets に **Secret** 型で登録します（`npx wrangler secret put <NAME>` でも可）。
+
+| 変数 | 値 |
+| ---- | -- |
+| `MICROCMS_SERVICE_DOMAIN` | サービス ID |
+| `MICROCMS_API_KEY` | ビルドと同じ GET のみのキーで可 |
+
+ブランチごとの Preview（`npx wrangler preview`）は、本番 Worker とは別に secret を持ちます。Preview でもプレビュールートを動かす場合は、同じ 2 つを `npx wrangler preview secret` か、Dashboard の Preview 用設定（base config）にも登録してください。
+
+ビルド変数とランタイム secret は**別物**です。ビルド変数はビルド中にだけ存在し、Worker の実行時には渡りません。そのため、同じ値を両方に登録します。Secret 型は `wrangler deploy` で上書きされません。
+
+**ドメイン**: Worker の Settings → Domains & Routes で、Custom Domain に `preview.pami.ooo` を追加します（pami.ooo の DNS が Cloudflare にある必要があります）。

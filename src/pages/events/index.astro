@@ -2,9 +2,9 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import SiteNav from '../../components/common/SiteNav.astro';
 import EventList from '../../components/events/EventList.astro';
-import { getEvents } from '../../lib/events';
+import { getPublishedEvents } from '../../lib/events';
 
-const events = await getEvents();
+const events = await getPublishedEvents();
 const current = events.filter((event) => event.status !== 'past');
 const past = events.filter((event) => event.status === 'past');
 ---

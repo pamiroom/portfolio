@@ -1,0 +1,5 @@
+# Runtime secrets for the preview Worker when run locally (wrangler dev / astro preview).
+# Copy to .dev.vars. If .dev.vars is absent, Wrangler falls back to .env.
+# In production these are Cloudflare Worker secrets (Settings → Variables and Secrets), not build variables.
+MICROCMS_SERVICE_DOMAIN=
+MICROCMS_API_KEY=

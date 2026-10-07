@@ -1,7 +1,8 @@
 // @ts-check
-import { defineConfig } from 'astro/config';
+import { defineConfig, envField } from 'astro/config';
 import { loadEnv } from 'vite';
 import sitemap from '@astrojs/sitemap';
+import cloudflare from '@astrojs/cloudflare';
 
 const env = loadEnv(process.env.NODE_ENV ?? 'production', process.cwd(), '');
 
@@ -9,7 +10,7 @@ const env = loadEnv(process.env.NODE_ENV ?? 'production', process.cwd(), '');
 const LOCAL_SITE = 'https://pami.example';
 
 /** Builds on a hosting platform / CI are treated as deploys. */
-const isHostedBuild = Boolean(env.CI || env.VERCEL || env.NETLIFY || env.CF_PAGES);
+const isHostedBuild = Boolean(env.CI || env.WORKERS_CI || env.VERCEL || env.NETLIFY || env.CF_PAGES);
 
 /**
  * Stops a deploy that would publish placeholder URLs or mock events.
@@ -44,13 +45,33 @@ function deploymentGuards() {
   };
 }
 
+/** microCMS credentials: read at build time (static pages) and at request time (preview Worker). */
+const microCMSSecret = () => envField.string({ context: 'server', access: 'secret', optional: true });
+
 // https://astro.build/config
 export default defineConfig({
   // Used for canonical URLs, OGP and the sitemap.
   site: env.SITE_URL || LOCAL_SITE,
   // Pages are emitted as /about/index.html, so /about/ is the one canonical form.
   trailingSlash: 'always',
-  integrations: [deploymentGuards(), sitemap()],
+  // Every page stays static (prerendered) for XServer. Only routes that opt out with
+  // `export const prerender = false` (the microCMS preview) run on Cloudflare Workers.
+  output: 'static',
+  adapter: cloudflare({
+    // Build static pages in Node exactly as before (sharp, build-time microCMS fetch).
+    prerenderEnvironment: 'node',
+    // Optimise images at build time; the Worker passes images through (no Images binding).
+    imageService: 'compile',
+  }),
+  // No sessions: avoids the adapter's default Cloudflare KV session binding.
+  session: false,
+  env: {
+    schema: {
+      MICROCMS_SERVICE_DOMAIN: microCMSSecret(),
+      MICROCMS_API_KEY: microCMSSecret(),
+    },
+  },
+  integrations: [deploymentGuards(), sitemap({ filter: (page) => !new URL(page).pathname.startsWith('/preview/') })],
   image: {
     // microCMS media is served from this host; Astro optimizes it at build time.
     domains: ['images.microcms-assets.io'],

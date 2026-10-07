@@ -1,20 +1,30 @@
 /**
- * Event data access. Pages call getEvents()/getEventBySlug() and never touch
- * microCMS or the mock data directly.
+ * Event data access. Pages call these functions and never touch microCMS or
+ * the mock data directly.
  *
- * Source:
+ * getPublishedEvents() — build time, for the static pages:
  *   - MICROCMS_SERVICE_DOMAIN + MICROCMS_API_KEY set → microCMS `events` API
  *   - otherwise → src/data/events.ts (deploys are stopped earlier by the
  *     deployment guard in astro.config.mjs)
+ *
+ * getPreviewEvent() — request time, for the preview Worker only. Fetches one
+ * entry by content ID + draftKey. Never falls back to mock data.
+ *
+ * Both run through the same normalisation (fromMicroCMS), so validation,
+ * sanitising, images and status logic are identical.
  */
 import { SITE } from '../config/site';
 import { mockEvents } from '../data/events';
 import type { EventStatus, MicroCMSEvent, MicroCMSEventFields, MockEvent, PamiEvent } from '../types/event';
 import { isoDay } from './format';
+import { isMicroCMSRequestError } from 'microcms-js-sdk';
 import { getMicroCMSClient } from './microcms';
 import { sanitizeRichText } from './sanitize';
 
 const ENDPOINT = 'events';
+/** microCMS content IDs and draft keys: letters, digits, hyphen and underscore. */
+const CONTENT_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+const DRAFT_KEY_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 /** Slugs become URLs: lowercase letters, digits and hyphens only. */
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -152,7 +162,7 @@ function compare(a: PamiEvent, b: PamiEvent): number {
 // One request per build, shared by every page. The dev server refetches so CMS edits show up.
 let cache: Promise<PamiEvent[]> | undefined;
 
-export function getEvents(): Promise<PamiEvent[]> {
+export function getPublishedEvents(): Promise<PamiEvent[]> {
   const fetchSorted = () =>
     load().then((events) => {
       assertUniqueSlugs(events);
@@ -163,6 +173,40 @@ export function getEvents(): Promise<PamiEvent[]> {
   return cache;
 }
 
-export async function getEventBySlug(slug: string): Promise<PamiEvent | undefined> {
-  return (await getEvents()).find((event) => event.slug === slug);
+export type PreviewResult =
+  | { ok: true; event: PamiEvent }
+  /** bad-request: malformed ID or key · not-found: no such draft · unavailable: config, API or network failure */
+  | { ok: false; reason: 'bad-request' | 'not-found' | 'unavailable' };
+
+/**
+ * One event, including unpublished changes, for the microCMS screen preview.
+ * Identified by content ID (never slug). The draftKey is only ever sent to the
+ * microCMS API: it is not logged, rendered or put into any URL.
+ */
+export async function getPreviewEvent(contentId: string | undefined, draftKey: string | null): Promise<PreviewResult> {
+  if (!contentId || !CONTENT_ID_PATTERN.test(contentId) || !draftKey || !DRAFT_KEY_PATTERN.test(draftKey)) {
+    return { ok: false, reason: 'bad-request' };
+  }
+  const client = getMicroCMSClient();
+  if (!client) {
+    console.error('[preview] microCMS runtime secrets are not set');
+    return { ok: false, reason: 'unavailable' };
+  }
+  try {
+    const item = await client.getListDetail<MicroCMSEventFields>({
+      endpoint: ENDPOINT,
+      contentId,
+      queries: { draftKey },
+      customRequestInit: { cache: 'no-store' },
+    });
+    const event = fromMicroCMS(item, new Date());
+    return event ? { ok: true, event } : { ok: false, reason: 'not-found' };
+  } catch (error) {
+    // Only the HTTP status is logged: messages could echo request details.
+    const status = isMicroCMSRequestError(error) ? error.status : undefined;
+    if (status === 404) return { ok: false, reason: 'not-found' };
+    if (status === 400) return { ok: false, reason: 'bad-request' };
+    console.error(`[preview] microCMS request failed (status: ${status ?? 'network'})`);
+    return { ok: false, reason: 'unavailable' };
+  }
 }
