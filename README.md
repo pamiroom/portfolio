@@ -128,11 +128,19 @@ microCMS の設定がなくても `src/data/events.ts` のモックイベント�
 
 ### 4. 公開したら自動で反映する（Webhook）
 
-静的サイトなので、記事の公開・更新時にサイトを再ビルドする必要があります。
+静的サイトなので、記事の公開・更新時にサイトを再ビルドする必要があります。本番は GitHub Actions がビルドして XServer へ配置します（下記「デプロイ」参照）。microCMS からは `repository_dispatch` で起動します。
 
-1. 本番（XServer）向けのビルド・アップロードを行う仕組み（CI など）で、Deploy Hook URL を発行
-2. microCMS「API 設定 → Webhook → カスタム通知」に、その URL を登録
+1. GitHub で **fine-grained personal access token** を作成します
+   - Repository access: `pamiroom/portfolio` のみ
+   - Permissions: **Contents: Read and write**（`repository_dispatch` の送信に必要。ほかの権限は付けません）
+   - 有効期限を付け、期限前に作り直します
+2. microCMS「API 設定 → Webhook → GitHub Actions」を追加
+   - ユーザー名 / リポジトリ名: `pamiroom` / `portfolio`
+   - トークン: 1 のトークン
+   - トリガーイベント（`event_type`）: **`microcms_build`**
 3. 「コンテンツの公開時・更新時・削除時」にチェック
+
+Webhook から起動した場合も、常に `main` の最新コミットをビルドします。
 
 ### 5. 画面プレビュー（下書きの確認）
 
@@ -162,12 +170,13 @@ https://preview.pami.ooo/preview/events/{CONTENT_ID}/?draftKey={DRAFT_KEY}
 | `endAt` より後 | Past |
 | `endAt` が空 | 開始日の 23:59:59（日本時間）まで Now on |
 
-運用は次の 2 つを組み合わせる想定です。
+運用は次の 2 つを組み合わせています（どちらも `.github/workflows/deploy-xserver.yml`）。
 
-1. microCMS Webhook → Deploy Hook（コンテンツの変更をすぐ反映する）
-2. **毎日 1 回の定期デプロイ**（例: 毎日 0:05 JST に Deploy Hook を叩く。日付の変化を反映する）
+1. microCMS Webhook → `repository_dispatch`（コンテンツの変更をすぐ反映する）
+2. **毎時 5 分の定期デプロイ**（`cron: '5 * * * *'`。時間の経過によるステータスの変化を反映する）
 
-定期デプロイには、GitHub Actions の `schedule` で `curl -X POST <Deploy Hook URL>` を実行する、または Vercel Cron などを使います。
+毎時にしているのは、イベントの開始・終了が時刻単位だからです（例: 18:00〜21:00）。1 日 1 回（0:05）では、夜のイベントは当日ずっと Upcoming のままで、翌日には Past になり、Now on が一度も表示されません。
+リポジトリは public なので Actions の実行時間はかかりません。rsync は `--checksum` で内容が同じファイルを書き換えないため、変化のない回は XServer にほぼ何も書き込みません。
 ステータスを秒単位でリアルタイムに変える必要はないため、そのためのクライアント JS は入れていません。
 
 本文 HTML はビルド時にサニタイズしています（`src/lib/sanitize.ts`）。`script` や `style`、イベント属性は除去されます。iframe は YouTube / Vimeo / Spotify / SoundCloud のみ許可しています。
@@ -233,6 +242,8 @@ src/
   worker.ts          プレビュー Worker の入口（静的ファイル配信、noindex、末尾スラッシュ）
   styles/            tokens.css, global.css
   types/             event.ts, work.ts, profile.ts, image.ts
+scripts/xserver/     本番デプロイ用の検査スクリプト（成果物の監査・配置先の検査・smoke test）
+.github/workflows/   deploy-xserver.yml（GitHub Actions → XServer）
 ```
 
 - クライアント JS は **0**。hover やラベル、GIF 風の切り替え、星の瞬き、パララックス（CSS scroll-driven animations）、ページ遷移（ネイティブ View Transitions）はすべて CSS で実装しています。非対応のブラウザでは静止した状態で表示されます。
@@ -242,13 +253,80 @@ src/
 
 ## デプロイ
 
-### 本番: pami.ooo（XServer / 静的）
+### 本番: pami.ooo（GitHub Actions → XServer）
 
-1. `MICROCMS_SERVICE_DOMAIN`・`MICROCMS_API_KEY`・`MICROCMS_REQUIRED=true`・`SITE_URL=https://pami.ooo` を設定して `npm run build`
-2. **`dist/client/` の中身**を公開ディレクトリにアップロード（`dist/` ではありません）
-   - `_headers` と `.assetsignore` は Cloudflare 専用のファイルです。XServer では使わないので、アップロードから外して構いません（置いても無害です）。
-   - `dist/server/` はアップロードしないでください。
-3. XServer では Worker ランタイムは不要です。`/preview/` 以下は存在せず、404 になります。
+`.github/workflows/deploy-xserver.yml` が、ビルドから XServer への配置、公開サイトの確認までを自動で行います。
+
+```
+main への push / microCMS Webhook / 手動実行 / 毎時 5 分
+  → npm ci → npm run check → npm run build（microCMS 実データ）
+  → 成果物の監査 → SSH 疎通確認（読み取りのみ）
+  → rsync で dist/client/ の中身 → public_html/
+  → https://pami.ooo の動作確認（smoke test） → Summary
+```
+
+**起動条件**
+
+| トリガー | 用途 |
+| -------- | ---- |
+| `push`（`main` のみ） | コードの変更 |
+| `repository_dispatch`（`microcms_build`） | microCMS の公開・更新・削除 |
+| `workflow_dispatch` | 手動実行（Actions → *Deploy pami.ooo (XServer)* → Run workflow、ブランチは `main`） |
+| `schedule`（`5 * * * *`） | イベントのステータスの更新 |
+
+- PR ではデプロイしません。`main` 以外のブランチで手動実行しても、ジョブはスキップされます。
+- `concurrency: pami-production-deploy` によって、本番デプロイは常に 1 つずつ実行されます。実行中の同期は中断されず、後から来た実行が待ちます。
+- 権限は `contents: read` だけです。
+
+**GitHub Secrets（Settings → Secrets and variables → Actions）**
+
+| Secret | 内容 |
+| ------ | ---- |
+| `MICROCMS_SERVICE_DOMAIN` | microCMS のサービス ID |
+| `MICROCMS_API_KEY` | GET のみの API キー |
+| `XSERVER_SSH_HOST` | XServer の SSH ホスト名 |
+| `XSERVER_SSH_USER` | XServer のアカウント名 |
+| `XSERVER_SSH_PRIVATE_KEY` | デプロイ専用の SSH 秘密鍵（公開鍵を XServer に登録） |
+| `XSERVER_SSH_KNOWN_HOSTS` | XServer のホスト鍵（known_hosts 形式、`[ホスト名]:10022 ssh-ed25519 …`）。XServer 管理画面のフィンガープリントと照合済みのもの |
+| `XSERVER_DEPLOY_PATH` | `/home/<アカウント>/pami.ooo/public_html` |
+
+`SITE_URL=https://pami.ooo` と `MICROCMS_REQUIRED=true` はワークフローに固定で書いてあります。SSH のポートは XServer 固定の **10022** です。
+
+**配置するもの**: **`dist/client/` の中身**を `public_html/` 直下に置きます（`dist/client/index.html` → `public_html/index.html`）。`dist/server/`（プレビュー Worker）は配置しません。
+
+**安全装置**
+
+- 本番デプロイは `main` 以外からは実行されません。
+- ビルドでは、`SITE_URL` や microCMS のキーがない場合、または microCMS の取得に失敗した場合にビルドを止めます。モックで公開されることはありません。
+- 成果物の監査（`scripts/xserver/check-artifact.sh`）: 必須ページと `_astro/` があること、`pami.example`・API キーの値・`.env`・`.dev.vars`・`wrangler.json`・`preview/` が含まれないことを確認します。1 つでも引っかかれば配置しません。
+- 配置先の検査（`scripts/xserver/guard-deploy-path.sh`）: `/home/<アカウント>/pami.ooo/public_html` の形以外は拒否します（空文字、`/`、`/home`、`..`、別ドメインなど）。
+- SSH は `BatchMode yes`・`StrictHostKeyChecking yes`・`UpdateHostKeys no` で接続します。ホスト鍵は実行時に取得せず、Secret `XSERVER_SSH_KNOWN_HOSTS` に**固定**した鍵だけを信頼します。Secret が空・形式が不正・`[ホスト]:10022` の行がない場合は、接続せずに失敗します。秘密鍵・ホスト鍵・ホスト・ユーザー・パスは、権限 600 のファイルと ssh_config にだけ書きます。ログには出しません。
+- rsync はサーバー上の `.well-known/`・`.htaccess`・`.user.ini` を**更新も削除もしません**。Cloudflare 専用の `_headers`・`.assetsignore` は送りません。`public_html` を消す操作（`rm -rf` など）は一切しません。
+- `--delete-after` を使うので、ビルドから消えたファイルは、すべてを配置し終えた後に本番からも消えます。同期前に dry-run で、追加と削除の件数をログに出します。
+
+**smoke test**（`scripts/xserver/smoke.sh`）: `/`、`/about/`、`/events/` と、最初のイベント詳細ページについて、次を確認します。
+
+- HTTP 200 と HTML が返ること
+- サイト固有のマークアップがあること
+- `X-Robots-Tag: noindex` が**付いていない**こと（付いていれば、それはプレビュー Worker の応答）
+
+ビルドした HTML と完全に一致しない場合は、警告だけを出します（キャッシュが残っている可能性があるため）。smoke test が失敗しても、配置は完了していて巻き戻しません。実行が赤くなって、知らせるだけです。DNS の切り替え中など、`pami.ooo` がまだ XServer を向いていないときは、手動実行の **`skip_smoke`** にチェックを入れてください。
+
+**トラブルシューティング**
+
+| 症状 | 確認すること |
+| ---- | ------------ |
+| Build で `[deployment-guards]` | GitHub Secrets の `MICROCMS_*` が空ではないか |
+| Build で microCMS の `fetch API response status` | API キーの権限・期限、microCMS の障害 |
+| `XSERVER_SSH_KNOWN_HOSTS is empty` / `not a valid known_hosts entry` | Secret が登録されているか、known_hosts の 1 行がそのまま入っているか |
+| `…has no key for the SSH host on port 10022` | 行の先頭が `[ホスト名]:10022` か（ポートなしの形は 22 番用で、一致しません）。ホスト名が `XSERVER_SSH_HOST` と同じか |
+| `Host key verification failed` | XServer のホスト鍵が変わった可能性があります。管理画面のフィンガープリントを確認し、照合できた場合だけ Secret を更新してください |
+| `Permission denied (publickey)` | 公開鍵が XServer に登録されているか、秘密鍵が改行も含めて正しく登録されているか |
+| `Deploy path guard: …` | `XSERVER_DEPLOY_PATH` が `/home/<アカウント>/pami.ooo/public_html` の形か |
+| SSH 疎通確認で失敗 | 配置先のディレクトリが XServer 上に存在し、書き込めるか |
+| smoke test が `noindex` で失敗 | `pami.ooo` がプレビュー Worker（Cloudflare）を向いていないか |
+| smoke test が 404 で失敗 | DNS が XServer を向いているか、ドメイン設定が正しいか |
+| 定期実行が止まった | public リポジトリでは、60 日間コミットがないと `schedule` が自動で無効になります。Actions 画面から再度有効にしてください |
 
 ### プレビュー: preview.pami.ooo（Cloudflare Workers）
 

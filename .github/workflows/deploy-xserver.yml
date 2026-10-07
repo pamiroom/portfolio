@@ -1,0 +1,188 @@
+name: Deploy pami.ooo (XServer)
+
+# Builds the static site and syncs dist/client/ to XServer.
+# The Cloudflare Worker (preview.pami.ooo) is deployed separately by Workers Builds.
+
+on:
+  push:
+    branches:
+      - main
+  # microCMS webhook → POST /repos/pamiroom/portfolio/dispatches {"event_type":"microcms_build"}
+  repository_dispatch:
+    types:
+      - microcms_build
+  workflow_dispatch:
+    inputs:
+      skip_smoke:
+        description: Skip the post-deploy HTTP check (e.g. while pami.ooo DNS does not point at XServer yet)
+        type: boolean
+        default: false
+  # Event status (upcoming / now on / past) is fixed at build time and events have
+  # hour-level start/end times, so rebuild hourly. rsync --checksum keeps unchanged
+  # files untouched on the server, so most runs write nothing.
+  schedule:
+    - cron: '5 * * * *'
+
+permissions:
+  contents: read
+
+# One production deploy at a time; a new run waits instead of cancelling one mid-sync.
+concurrency:
+  group: pami-production-deploy
+  cancel-in-progress: false
+
+# Explicit bash = `bash -eo pipefail`: a failing command in a pipe fails the step.
+defaults:
+  run:
+    shell: bash
+
+env:
+  SITE_URL: https://pami.ooo
+  SSH_PORT: '10022'
+  BUILD_DIR: dist/client
+
+jobs:
+  deploy:
+    name: Build and deploy
+    # Production is only ever built from main (a manual run on another branch is skipped).
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node (from .nvmrc)
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Type check
+        run: npm run check
+
+      # CI=true makes astro.config.mjs fail the build if SITE_URL or the microCMS keys
+      # are missing, and a microCMS fetch error fails the build: no mock fallback.
+      - name: Build
+        id: build
+        run: npm run build
+        env:
+          MICROCMS_SERVICE_DOMAIN: ${{ secrets.MICROCMS_SERVICE_DOMAIN }}
+          MICROCMS_API_KEY: ${{ secrets.MICROCMS_API_KEY }}
+          MICROCMS_REQUIRED: 'true'
+
+      - name: Check build output
+        run: bash scripts/xserver/check-artifact.sh "$BUILD_DIR"
+        env:
+          MICROCMS_API_KEY: ${{ secrets.MICROCMS_API_KEY }}
+
+      # Secrets go to files and an ssh_config host alias; no command line or log
+      # line ever contains the host, user, path or key.
+      - name: Prepare SSH
+        run: |
+          install -d -m 700 ~/.ssh
+          (umask 077 && printf '%s\n' "$XSERVER_SSH_PRIVATE_KEY" > ~/.ssh/xserver_deploy)
+          # Host key: pinned in a secret (verified against the XServer control panel
+          # fingerprint), never fetched at run time. Fail closed if it is missing,
+          # unparsable, or does not cover [host]:port.
+          if [ -z "$XSERVER_SSH_KNOWN_HOSTS" ]; then
+            echo "::error::XSERVER_SSH_KNOWN_HOSTS is empty; refusing to connect without a pinned host key"
+            exit 1
+          fi
+          (umask 077 && printf '%s\n' "$XSERVER_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts)
+          if ! ssh-keygen -l -f ~/.ssh/known_hosts >/dev/null 2>&1; then
+            echo "::error::XSERVER_SSH_KNOWN_HOSTS is not a valid known_hosts entry"
+            exit 1
+          fi
+          if ! ssh-keygen -F "[$XSERVER_SSH_HOST]:$SSH_PORT" -f ~/.ssh/known_hosts >/dev/null 2>&1; then
+            echo "::error::XSERVER_SSH_KNOWN_HOSTS has no key for the SSH host on port $SSH_PORT (the line must start with [host]:$SSH_PORT)"
+            exit 1
+          fi
+          {
+            echo 'Host xserver'
+            printf '  HostName %s\n' "$XSERVER_SSH_HOST"
+            printf '  User %s\n' "$XSERVER_SSH_USER"
+            printf '  Port %s\n' "$SSH_PORT"
+            echo '  IdentityFile ~/.ssh/xserver_deploy'
+            echo '  IdentitiesOnly yes'
+            echo '  BatchMode yes'
+            echo '  StrictHostKeyChecking yes'
+            echo '  UserKnownHostsFile ~/.ssh/known_hosts'
+            echo '  UpdateHostKeys no'
+            echo '  ConnectTimeout 20'
+            echo '  ServerAliveInterval 15'
+          } > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+        env:
+          XSERVER_SSH_HOST: ${{ secrets.XSERVER_SSH_HOST }}
+          XSERVER_SSH_USER: ${{ secrets.XSERVER_SSH_USER }}
+          XSERVER_SSH_PRIVATE_KEY: ${{ secrets.XSERVER_SSH_PRIVATE_KEY }}
+          XSERVER_SSH_KNOWN_HOSTS: ${{ secrets.XSERVER_SSH_KNOWN_HOSTS }}
+
+      - name: Check SSH and destination (read-only)
+        run: |
+          deploy_path="$(bash scripts/xserver/guard-deploy-path.sh "$XSERVER_DEPLOY_PATH")"
+          quoted="$(printf '%q' "$deploy_path")"
+          # shellcheck disable=SC2029 # expanded locally on purpose: the path is validated above
+          ssh xserver "command -v rsync >/dev/null && test -d $quoted && test -w $quoted"
+          echo "SSH OK, rsync available, destination exists and is writable."
+        env:
+          XSERVER_DEPLOY_PATH: ${{ secrets.XSERVER_DEPLOY_PATH }}
+
+      # Sync the contents of dist/client/ into public_html/ (note the trailing slash).
+      # Excluded paths are neither uploaded nor deleted on the server.
+      - name: Deploy (rsync)
+        id: deploy
+        run: |
+          deploy_path="$(bash scripts/xserver/guard-deploy-path.sh "$XSERVER_DEPLOY_PATH")"
+          # shellcheck disable=SC2054 # the comma in --chmod=D755,F644 is rsync syntax
+          rsync_opts=(
+            --archive --no-owner --no-group --chmod=D755,F644
+            --checksum --compress --delete-after
+            --exclude=.well-known/ --exclude=.htaccess --exclude=.user.ini
+            --exclude=_headers --exclude=.assetsignore
+            --rsh=ssh
+          )
+          changes="$(rsync "${rsync_opts[@]}" --dry-run --itemize-changes "$BUILD_DIR/" "xserver:$deploy_path/")"
+          echo "Planned: $(grep -c '^<f' <<<"$changes" || true) file(s) to upload, $(grep -c '^\*deleting' <<<"$changes" || true) to delete."
+          rsync "${rsync_opts[@]}" --stats "$BUILD_DIR/" "xserver:$deploy_path/" |
+            { grep -E '^(Number of (regular )?files transferred|Number of deleted files|Total transferred file size)' || true; }
+        env:
+          XSERVER_DEPLOY_PATH: ${{ secrets.XSERVER_DEPLOY_PATH }}
+
+      - name: Remove SSH material
+        if: always()
+        run: rm -f ~/.ssh/xserver_deploy ~/.ssh/config ~/.ssh/known_hosts
+
+      # Upload already succeeded at this point; a failure here marks the run red
+      # for attention but does not roll anything back.
+      - name: Smoke test https://pami.ooo
+        id: smoke
+        if: ${{ !inputs.skip_smoke }}
+        run: bash scripts/xserver/smoke.sh "$SITE_URL" "$BUILD_DIR"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo '## PAMI Production Deploy'
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Commit | \`${GITHUB_SHA::7}\` |"
+            echo "| Trigger | \`$TRIGGER\` |"
+            echo "| Build | $BUILD |"
+            echo "| Deploy | $DEPLOY |"
+            echo "| Smoke | $SMOKE |"
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          TRIGGER: ${{ github.event_name }}
+          BUILD: ${{ steps.build.outcome || 'not run' }}
+          DEPLOY: ${{ steps.deploy.outcome || 'not run' }}
+          SMOKE: ${{ steps.smoke.outcome || 'not run' }}
