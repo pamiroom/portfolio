@@ -1,4 +1,4 @@
-# PAMI — a small room on the internet
+# Pami — Creator
 
 Pami のポートフォリオサイト。Astro による静的サイトで、**イベント情報だけ microCMS** から取得します。
 Works・プロフィールはリポジトリ内のファイルで管理します。
@@ -211,7 +211,8 @@ import myWork from '../assets/works/my-work.png';
 
 ## プロフィールの変更
 
-`src/data/profile.ts` **1 ファイルだけ**を編集します。名前、キャッチ、紹介文（日・英）、メール、リンク、経歴（Exhibition / Media / Award など見出しは自由）、Client を変更できます。
+`src/data/profile.ts` **1 ファイルだけ**を編集します。名前（日・英）、肩書き、拠点、キャッチ、紹介文（日・英。段落の配列で、最初の段落がリード）、メール、リンク、経歴（Exhibition / Media / Award など見出しは自由）、Client を変更できます。
+空のもの（項目が 0 件の経歴の見出し、空の `clients`、登録していない SNS）はページに出ません。「なし」などの文言を入れる必要はありません。
 ポートレートは `src/assets/profile/portrait.png` を差し替えてください。
 
 ## デザインの調整

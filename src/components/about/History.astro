@@ -7,11 +7,12 @@ type Props = {
 };
 
 const { sections } = Astro.props;
+const visible = sections.filter((section) => section.entries.length > 0);
 const isExternal = (href: string) => /^https?:\/\//.test(href);
 ---
 
 {
-  sections.map((section) => (
+  visible.map((section) => (
     <section class="history">
       <h2 class="history__heading">{section.heading}</h2>
       <ul>

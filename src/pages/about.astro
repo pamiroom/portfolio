@@ -6,9 +6,13 @@ import Bio from '../components/about/Bio.astro';
 import History from '../components/about/History.astro';
 import Clients from '../components/about/Clients.astro';
 import { profile } from '../data/profile';
+
+// Sections without data are left out entirely (no empty headings or lists).
+const history = profile.history.filter((section) => section.entries.length > 0);
+const hasClients = profile.clients.length > 0;
 ---
 
-<BaseLayout room="about" title="About" description={profile.bioEn}>
+<BaseLayout room="about" title="About" description={profile.bioEn.join(' ')}>
   <div class="about__nav"><SiteNav current="about" /></div>
   <Bio />
   <figure class="about__portrait">
@@ -20,10 +24,14 @@ import { profile } from '../data/profile';
       loading="eager"
     />
   </figure>
-  <div class="about__records">
-    <History sections={profile.history} />
-    <Clients clients={profile.clients} />
-  </div>
+  {
+    (history.length > 0 || hasClients) && (
+      <div class="about__records">
+        {history.length > 0 && <History sections={history} />}
+        {hasClients && <Clients clients={profile.clients} />}
+      </div>
+    )
+  }
 </BaseLayout>
 
 <style>

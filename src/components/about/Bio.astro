@@ -1,15 +1,45 @@
 ---
-/** Full-width biography in Japanese and English, then the contact line. */
+/**
+ * Name, then the Japanese and English text across the full width, then
+ * contact and links. Only links present in profile.links are shown.
+ */
 import { profile } from '../../data/profile';
 ---
 
 <section class="bio" aria-labelledby="bio-heading">
-  <h1 id="bio-heading" class="visually-hidden">About {profile.name}</h1>
-  <p lang="ja">{profile.bioJa}</p>
-  <p lang="en">{profile.bioEn}</p>
-  <p class="bio__contact">
-    <a href={`mailto:${profile.email}`}>お問い合わせ (Contact) {profile.email}</a>
-  </p>
+  <header class="bio__identity">
+    <h1 id="bio-heading" class="bio__name">
+      {profile.name}{' '}<span class="bio__name-ja" lang="ja">{profile.nameJa}</span>
+    </h1>
+    <p class="bio__role">{profile.role} / {profile.location}</p>
+  </header>
+
+  <div class="bio__text" lang="ja">
+    {profile.bioJa.map((paragraph) => <p>{paragraph}</p>)}
+  </div>
+  <div class="bio__text" lang="en">
+    {profile.bioEn.map((paragraph) => <p>{paragraph}</p>)}
+  </div>
+
+  <dl class="bio__contact">
+    <div>
+      <dt>Contact</dt>
+      <dd><a class="bio__email" href={`mailto:${profile.email}`}>{profile.email}</a></dd>
+    </div>
+    {
+      profile.links.map((link) => (
+        <div>
+          <dt>{link.label}</dt>
+          <dd>
+            <a href={link.href} rel="me noopener">
+              {link.handle ?? link.label}
+              <span class="glyph" aria-hidden="true">↗</span>
+            </a>
+          </dd>
+        </div>
+      ))
+    }
+  </dl>
 </section>
 
 <style>
@@ -21,12 +51,53 @@ import { profile } from '../../data/profile';
     line-height: var(--leading);
   }
 
+  .bio__name {
+    font-size: inherit;
+  }
+
+  .bio__name-ja {
+    margin-inline-start: 0.35em;
+    letter-spacing: 0.06em;
+  }
+
+  .bio__role {
+    margin-top: 0.15em;
+    font-size: var(--text-sm);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    color: var(--room-sub);
+  }
+
   .bio [lang='ja'] {
     letter-spacing: 0.06em;
     line-break: strict;
   }
 
-  .bio__contact a {
+  .bio__contact {
+    display: grid;
+    gap: 0.2em;
+  }
+
+  .bio__contact > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 0.8em;
+    align-items: baseline;
+  }
+
+  .bio__contact dt {
+    min-width: 6.5em;
+    font-size: var(--text-sm);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    color: var(--room-sub);
+  }
+
+  .bio__contact dd {
+    overflow-wrap: anywhere;
+  }
+
+  .bio__email {
     background: var(--room-invert-bg);
     color: var(--room-invert-fg);
     text-decoration-thickness: 1px;
@@ -35,7 +106,7 @@ import { profile } from '../../data/profile';
   }
 
   @media (hover: hover) {
-    .bio__contact a:hover {
+    .bio__email:hover {
       background: transparent;
       color: var(--room-fg);
     }
