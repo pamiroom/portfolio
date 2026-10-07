@@ -334,6 +334,8 @@ ErrorDocument 404 /404.html
 | `Permission denied (publickey)` | 公開鍵が XServer に登録されているか、秘密鍵が改行も含めて正しく登録されているか |
 | `Deploy path guard: …` | `XSERVER_DEPLOY_PATH` が `/home/<アカウント>/pami.ooo/public_html` の形か |
 | SSH 疎通確認で失敗 | 配置先のディレクトリが XServer 上に存在し、書き込めるか |
+| `attempt 1/3 failed with a transient network error … Retrying` | GitHub の runner から XServer への一時的な通信障害です。SSH 疎通確認と rsync は、接続タイムアウト・接続拒否・接続リセットなど通信レベルの失敗に限り、20 秒間隔で最大 3 回まで自動で再試行します（`scripts/xserver/with-ssh-retry.sh`）。3 回とも失敗した場合は、少し待ってから手動で再実行してください |
+| `failed: authentication or permission denied` / `host key verification failed` / `SSH config error` など（`Not retried`） | 認証・ホスト鍵・SSH 設定・鍵ファイル・パスの問題です。再試行しても直らないため、すぐに失敗させています。ログには分類だけを出し、ssh の生のエラー文（ユーザー名・ホスト・パスを含む）は出しません |
 | smoke test が `noindex` で失敗 | `pami.ooo` がプレビュー Worker（Cloudflare）を向いていないか |
 | smoke test が 404 で失敗 | DNS が XServer を向いているか、ドメイン設定が正しいか |
 | 定期実行が止まった | public リポジトリでは、60 日間コミットがないと `schedule` が自動で無効になります。Actions 画面から再度有効にしてください |

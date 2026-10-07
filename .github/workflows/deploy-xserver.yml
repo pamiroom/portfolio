@@ -129,8 +129,11 @@ jobs:
         run: |
           deploy_path="$(bash scripts/xserver/guard-deploy-path.sh "$XSERVER_DEPLOY_PATH")"
           quoted="$(printf '%q' "$deploy_path")"
+          # Transient network failures (e.g. runner → XServer timeouts) are retried;
+          # auth / host key / config errors fail at once. Raw ssh stderr is never logged.
           # shellcheck disable=SC2029 # expanded locally on purpose: the path is validated above
-          ssh xserver "command -v rsync >/dev/null && test -d $quoted && test -w $quoted"
+          bash scripts/xserver/with-ssh-retry.sh "SSH check" \
+            ssh xserver "command -v rsync >/dev/null && test -d $quoted && test -w $quoted"
           echo "SSH OK, rsync available, destination exists and is writable."
         env:
           XSERVER_DEPLOY_PATH: ${{ secrets.XSERVER_DEPLOY_PATH }}
@@ -149,9 +152,13 @@ jobs:
             --exclude=_headers --exclude=.assetsignore
             --rsh=ssh
           )
-          changes="$(rsync "${rsync_opts[@]}" --dry-run --itemize-changes "$BUILD_DIR/" "xserver:$deploy_path/")"
+          # Re-running rsync is safe: it converges to the same state and --delete-after
+          # only deletes at the end of a completed pass. Only transport failures retry.
+          changes="$(bash scripts/xserver/with-ssh-retry.sh "rsync dry-run" \
+            rsync "${rsync_opts[@]}" --dry-run --itemize-changes "$BUILD_DIR/" "xserver:$deploy_path/")"
           echo "Planned: $(grep -c '^<f' <<<"$changes" || true) file(s) to upload, $(grep -c '^\*deleting' <<<"$changes" || true) to delete."
-          rsync "${rsync_opts[@]}" --stats "$BUILD_DIR/" "xserver:$deploy_path/" |
+          bash scripts/xserver/with-ssh-retry.sh "rsync" \
+            rsync "${rsync_opts[@]}" --stats "$BUILD_DIR/" "xserver:$deploy_path/" |
             { grep -E '^(Number of (regular )?files transferred|Number of deleted files|Total transferred file size)' || true; }
         env:
           XSERVER_DEPLOY_PATH: ${{ secrets.XSERVER_DEPLOY_PATH }}
