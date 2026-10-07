@@ -304,6 +304,16 @@ main への push / microCMS Webhook / 手動実行 / 毎時 5 分
 - rsync はサーバー上の `.well-known/`・`.htaccess`・`.user.ini` を**更新も削除もしません**。Cloudflare 専用の `_headers`・`.assetsignore` は送りません。`public_html` を消す操作（`rm -rf` など）は一切しません。
 - `--delete-after` を使うので、ビルドから消えたファイルは、すべてを配置し終えた後に本番からも消えます。同期前に dry-run で、追加と削除の件数をログに出します。
 
+**XServer 側で必要な設定（サーバー上で管理）**
+
+`public_html/.htaccess` に次の 1 行が必要です。ないと、存在しない URL で Astro の 404 ではなく XServer 既定の 404 ページが出ます。
+
+```
+ErrorDocument 404 /404.html
+```
+
+`.htaccess` はリポジトリでは管理せず、rsync の対象からも外しています。そのため、この設定はデプロイをしても消えません。XServer が生成した既存の行（サーバーキャッシュの `SetEnvIf`、HTTPS へのリダイレクト）はそのまま残し、最後にこの 1 行だけを追加しています。編集はサーバーパネルの「.htaccess 編集」か SSH で行います。
+
 **smoke test**（`scripts/xserver/smoke.sh`）: `/`、`/about/`、`/events/` と、最初のイベント詳細ページについて、次を確認します。
 
 - HTTP 200 と HTML が返ること
