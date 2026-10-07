@@ -1,0 +1,124 @@
+---
+/**
+ * Hand-drawn black doodles scattered in the margins of the home page, behind
+ * everything. Purely decorative: no pointer events, hidden from assistive tech.
+ *
+ * Vertical positions are a share of the page height, so the scatter follows
+ * the Works column at any width. Horizontal positions stay in the side margins
+ * (and bleed off the edge a little); the centre column is left alone.
+ */
+import illustration01 from '../../assets/material/illustration01.svg';
+import illustration02 from '../../assets/material/illustration02.svg';
+import illustration03 from '../../assets/material/illustration03.svg';
+import illustration04 from '../../assets/material/illustration04.svg';
+import illustration05 from '../../assets/material/illustration05.svg';
+
+/** Order = top to bottom of the page. `key` matches the per-piece CSS below. */
+const doodles = [
+  { key: 'd02', image: illustration02 },
+  { key: 'd05', image: illustration05 },
+  { key: 'd01', image: illustration01 },
+  { key: 'd04', image: illustration04 },
+  { key: 'd03', image: illustration03 },
+];
+---
+
+<div class="doodles" aria-hidden="true">
+  {
+    doodles.map(({ key, image }, index) => (
+      <img
+        class:list={['doodle', `doodle--${key}`]}
+        src={image.src}
+        width={image.width}
+        height={image.height}
+        alt=""
+        decoding="async"
+        loading={index === 0 ? 'eager' : 'lazy'}
+        draggable="false"
+      />
+    ))
+  }
+</div>
+
+<style>
+  .doodles {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: clip;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .doodle {
+    position: absolute;
+    height: auto;
+    max-width: none;
+    transform: rotate(var(--turn, 0deg));
+  }
+
+  /* Small sparkle, just below the intro on the left. */
+  .doodle--d02 {
+    top: 7%;
+    left: 13vw;
+    width: clamp(54px, 6vw, 96px);
+    opacity: 0.7;
+    --turn: -8deg;
+  }
+
+  /* Small flower, partly off the right edge. */
+  .doodle--d05 {
+    top: 19%;
+    right: -2vw;
+    width: clamp(70px, 7.5vw, 120px);
+    opacity: 0.62;
+  }
+
+  /* The large star: biggest and faintest, cut by the left edge. */
+  .doodle--d01 {
+    top: 34%;
+    left: -4vw;
+    width: clamp(120px, 16vw, 250px);
+    opacity: 0.5;
+    --turn: 5deg;
+  }
+
+  /* Big flower, well inside the right margin. */
+  .doodle--d04 {
+    top: 55%;
+    right: 9vw;
+    width: clamp(90px, 10vw, 170px);
+    opacity: 0.55;
+    --turn: 10deg;
+  }
+
+  /* Small star, low on the page, closer in on the left. */
+  .doodle--d03 {
+    top: 77%;
+    left: 21vw;
+    width: clamp(60px, 5.5vw, 92px);
+    opacity: 0.68;
+  }
+
+  /* Phones: keep three, tucked against the edges. */
+  @media (max-width: 47.99em) {
+    .doodle--d05,
+    .doodle--d03 {
+      display: none;
+    }
+
+    .doodle--d02 {
+      left: 6vw;
+    }
+
+    .doodle--d01 {
+      left: -12vw;
+      width: 34vw;
+    }
+
+    .doodle--d04 {
+      right: -6vw;
+      width: 26vw;
+    }
+  }
+</style>

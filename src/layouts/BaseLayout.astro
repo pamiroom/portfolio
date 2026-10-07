@@ -42,6 +42,8 @@ const THEME_COLOR: Record<RoomId, string> = {
     <a class="skip-link" href="#main">Skip to content</a>
     <div class="page">
       {sky && <Sky {...sky} />}
+      {/* Page-specific decoration, behind main (e.g. the home doodles). */}
+      <slot name="background" />
       <main id="main" class="page__main">
         <slot />
       </main>
